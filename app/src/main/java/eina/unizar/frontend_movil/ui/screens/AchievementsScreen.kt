@@ -2,6 +2,9 @@ package eina.unizar.frontend_movil.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -14,16 +17,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eina.unizar.frontend_movil.ui.theme.*
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import eina.unizar.frontend_movil.ui.functions.functions
 
-data class AchievementData(
-    val title: String,
-    val isCompleted: Boolean,
-    val progress: String = "",
-    val xpReward: String = ""
+@Serializable
+data class Achievement(
+    val id: Int,
+    val nombre: String,
+    val descripcion: String
+)
+
+@Serializable
+data class UnachievedResponse(
+    val percentage: Double,
+    val achievements: List<Achievement>
 )
 
 @Composable
@@ -93,8 +103,44 @@ fun AchievementItem(
 }
 
 @Composable
-fun AchievementsScreen() {
-    Row(
+fun AchievementsScreen(userId: String = "1") {
+
+    var achieved by remember { mutableStateOf<List<Achievement>>(emptyList()) }
+    var unachieved by remember { mutableStateOf<List<Achievement>>(emptyList()) }
+    var progress by remember { mutableStateOf(0.0) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(true) {
+        scope.launch {
+            val achievedResponse = functions.get("achievements/$userId")
+            val unachievedResponse = functions.get("achievements/unachieved-achievements/$userId")
+
+            // Procesamos la respuesta de logros alcanzados
+            achievedResponse?.let {
+                try {
+                    achieved = Json.decodeFromString(it) // Deserializamos el JSON
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            // Procesamos la respuesta de logros no alcanzados
+            unachievedResponse?.let {
+                try {
+                    val parsed = Json.decodeFromString<UnachievedResponse>(it)
+                    unachieved = parsed.achievements
+                    progress = parsed.percentage
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+
+
+
+    /*Row(
         modifier = Modifier
             .fillMaxSize()
             .background(PurpleBackground)
@@ -116,32 +162,53 @@ fun AchievementsScreen() {
                 color = TextWhite,
                 modifier = Modifier.padding(vertical = 32.dp)
             )
-        }
+        }*/
 
-        // Columna derecha para los logros
-        val achievements = listOf(
-            AchievementData("Elimina a 50 jugadores", true, "+ 50 Xp"),
-            AchievementData("Juega 100 partidas", false, "(23/100)"),
-            AchievementData("Llega hasta el nivel 10", false, "(7/10)"),
-            AchievementData("Gana 10 partidas consecutivas", false, "(5/10)"),
-            AchievementData("Completa el tutorial", true, "+ 20 Xp"),
-            AchievementData("Desbloquea todos los personajes", false, "(3/5)"),
-            AchievementData("Alcanza el nivel 20", false, "(15/20)"),
-            AchievementData("Juega durante 10 horas", false, "(7/10)")
-        )
-
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        // UI con los logros obtenidos
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(PurpleBackground)
+                .padding(16.dp)
         ) {
-            items(achievements) { achievement ->
-                AchievementItem(
-                    title = achievement.title,
-                    isCompleted = achievement.isCompleted,
-                    progress = achievement.progress,
-                    xpReward = achievement.xpReward
-                )
+            // Título
+            Text(
+                text = "LOGROS",
+                fontSize = 40.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextWhite,
+                modifier = Modifier.padding(vertical = 32.dp)
+            )
+
+            // Progreso total de logros
+            Text(
+                text = "Progreso: ${"%.2f".format(progress)}%",
+                color = TextWhite,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium
+            )
+
+            // Mostrar los logros completados
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp)
+            ) {
+                items(achieved) { achievement ->
+                    AchievementItem(
+                        title = achievement.nombre,
+                        isCompleted = true,
+                        xpReward = "+XP"
+                    )
+                }
+
+                items(unachieved) { achievement ->
+                    AchievementItem(
+                        title = achievement.nombre,
+                        isCompleted = false,
+                        progress = "(Progreso)"
+                    )
+                }
             }
         }
     }
